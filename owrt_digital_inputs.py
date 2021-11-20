@@ -120,17 +120,15 @@ def commit_handler(event, data):
 
         applyConf()
 
-def ubus_init():
-    while (1):
-        try:
-            ubus.connect()
+def init():
+    try:
+        #ubus.connect()
 
-            applyConf()
-            main_poll()
+        applyConf()
 
-            ubus.disconnect()
-        except Exception as e:
-            journal.WriteLog(module_name, "Normal", "error", "ubus_init: Can't connect to ubus. " + str(e))
+        #ubus.disconnect()
+    except Exception as e:
+        journal.WriteLog(module_name, "Normal", "error", "init: " + str(e))
 
 def main_poll():
     try:
@@ -139,34 +137,31 @@ def main_poll():
             s = sensor
             mutex.release()
 
-            #polling by template
+                #polling by template
             if s['template'] == 'SNMP':
                 snmp_id = snmp_pr.get_snmp_value(s['snmp_addr'], s['community'], s['oid'], s['snmp_port'], s['timeout'])
+                time.sleep(int(s['timeout']))
                 value, err = snmp_pr.res_get_snmp_value(snmp_id)
-                    
-                s['status'] = str(err)
+                        
+                s['status'] = err
 
-                if value != -1:
-                    s['state'] = str(value)
+                if value != '-1':
+                    s['state'] = value
 
                 synchronize_config(s)
             else:
                 journal.WriteLog(module_name, "Normal", "error", "main_poll: Wrong template name " + s['template'])
-                    
+                        
             time.sleep(sensor_default['period'])
     except Exception as ex:
         journal.WriteLog(module_name, "Normal", "error", "main_poll: Exception error" + str(ex))
 
 def poll():
     try:
-        ubus.connect()
-
         ubus.listen(("commit", commit_handler))
         ubus.loop(1)
-
-        ubus.disconnect()
-    except:
-        journal.WriteLog(module_name, "Normal", "error", "register_handlers: Can't connect to ubus")
+    except Exception as e:
+        journal.WriteLog(module_name, "Normal", "error", "poll: " + str(e))
 
 def synchronize_config(sensor):
     try:
@@ -178,7 +173,7 @@ def synchronize_config(sensor):
         for confdict in list(confvalues[0]['values'].values()):
             if confdict['.type'] == 'sensor' and confdict['.name'] == sensor['section']:
                 state = confdict['state']
-                status = confdict['status']               
+                status = confdict['status']
 
         if state != sensor['state']:
             ubus.call("uci", "set", {"config" : confName, "section" : sensor['section'], "values" : { "state" : sensor['state'] }})
@@ -189,17 +184,23 @@ def synchronize_config(sensor):
             updated = True
 
         if updated:
-            ubus.call("uci", "commit", {"config" : confName})        
+            #print('Sensor ' + sensor['name'] + ' changed')
+            ubus.call("uci", "commit", {"config" : confName})
     except Exception as ex:
-        journal.WriteLog(module_name, "Normal", "error", "synchronize_config: Can't connect to ubus" + str(ex))
+        journal.WriteLog(module_name, "Normal", "error", "synchronize_config: " + str(ex))
 
 def main():
     #journal.WriteLog(module_name, "Normal", "notice", module_name + "started!")
-    ubus_init()
+    ubus.connect()
+
+    init()
 
     #main implementation
-    thr1 = Thread(target=poll, args=())
-    thr1.start()
+    while(1):
+        poll()
+        main_poll()
+
+    ubus.disconnect()
 
     #journal.WriteLog(module_name, "Normal", "notice", module_name + "finished!")
 
