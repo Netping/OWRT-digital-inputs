@@ -3,6 +3,7 @@ import ubus
 import time
 import random
 import sys
+import hashlib
 from journal import journal
 from threading import Thread
 from threading import Lock
@@ -15,13 +16,56 @@ module_name = 'DigitalInputs'
 confName = 'diginsensorconf'
 sensor_default = {}
 sensors = []
+threads = []
 mutex = Lock()
 snmp_pr = snmp_protocol()
+max_sensors = 0
 
+
+def calchash(fname):
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+
+    return hash_md5.hexdigest()
+
+def readhash(hashfile):
+    value = ''
+    with open(hashfile, "r") as f:
+        value = f.readline()
+
+    return value
+
+def thread_poll(thread_id, sensor):
+    while thread_id in threads:
+        if sensor['template'] == 'SNMP':
+            snmp_id = snmp_pr.get_snmp_value(sensor['snmp_addr'], sensor['community'], sensor['oid'], sensor['snmp_port'], sensor['timeout'])
+            time.sleep(int(sensor['timeout']))
+            value, err = snmp_pr.res_get_snmp_value(snmp_id)
+                      
+            mutex.acquire()
+
+            sensor['status'] = err
+
+            if value != '-1':
+                sensor['state'] = value
+
+            synchronize_config(sensor)
+
+            mutex.release()
+        else:
+            journal.WriteLog(module_name, "Normal", "error", "thread_poll: Wrong template name " + sensor['template'])
+                        
+        time.sleep(sensor_default['period'])
 
 def applyConf():
     confvalues = ubus.call("uci", "get", {"config": confName})
     for confdict in list(confvalues[0]['values'].values()):
+        if confdict['.type'] == 'globals' and confdict['.name'] == 'globals':
+            max_sensors = int(confdict['maxsensors'])
+            continue
+
         if confdict['.type'] == 'sensor' and confdict['.name'] == 'prototype':
             sensor_default['name'] = confdict['name']
             sensor_default['description'] = confdict['description']
@@ -31,9 +75,11 @@ def applyConf():
             sensor_default['state'] = bool(int(confdict['state']))
             sensor_default['status'] = confdict['status']
             sensor_default['period'] = int(confdict['period'])
+            continue
 
         if confdict['.type'] == 'sensor' and confdict['.name'] != 'prototype':
-            sensor = sensor_default
+            sensor = {}
+            sensor['name'] = sensor_default['name']
 
             #parse and fill new sensor
             try:
@@ -44,42 +90,42 @@ def applyConf():
             try:
                 sensor['name'] = confdict['name']
             except:
-                pass
+                sensor['name'] = sensor_default['name']
 
             try:
                 sensor['description'] = confdict['description']
             except:
-                pass
+                sensor['description'] = sensor_default['description']
 
             try:
                 sensor['ton_description'] = confdict['ton_description']
             except:
-                pass
+                sensor['ton_description'] = sensor_default['ton_description']
 
             try:
                 sensor['toff_description'] = confdict['toff_description']
             except:
-                pass
+                sensor['toff_description'] = sensor_default['toff_description']
 
             try:
                 sensor['template'] = confdict['template'] #maybe need map for this
             except:
-                pass
+                sensor['template'] = sensor_default['template']
 
             try:
                 sensor['state'] = bool(int(confdict['state']))
             except:
-                pass
+                sensor['state'] = bool(int(sensor_default['state']))
 
             try:
                 sensor['status'] = confdict['status']
             except:
-                pass
+                sensor['status'] = sensor_default['status']
 
             try:
                 sensor['period'] = int(confdict['period'])
             except:
-                pass
+                sensor['period'] = int(sensor_default['period'])
 
             if sensor['template'] == 'SNMP': #maybe need map for this
                 try:
@@ -109,20 +155,44 @@ def applyConf():
 
             mutex.acquire()
 
-            sensors.append(sensor)
+            if (len(sensors) < max_sensors):
+                sensors.append(sensor)
+            else:
+                journal.WriteLog(module_name, "Normal", "error", "Too many sensors in config file")
 
             mutex.release()
 
-def commit_handler(event, data):
-    #reconfigure
-    if data['config'] == confName:
-        del sensors[:]
+    #update threads from sensors
+    del threads[:]
 
-        applyConf()
+    mutex.acquire()
+
+    for s in sensors:
+        thr_id = len(threads) + 1
+
+        threads.append(thr_id)
+
+        thr = Thread(target=thread_poll, args=(thr_id, s))
+        thr.start()
+
+    mutex.release()
+
+def commit_handler():
+    #reconfigure
+    mutex.acquire()
+    del sensors[:]
+    mutex.release()
+
+    applyConf()
 
 def init():
     try:
         #ubus.connect()
+
+        newHash = calchash("/etc/config/diginsensorconf")
+
+        with open("/etc/netping_digital_inputs/diginsensor_hash", "w") as f:
+            f.write(newHash)
 
         applyConf()
 
@@ -130,38 +200,15 @@ def init():
     except Exception as e:
         journal.WriteLog(module_name, "Normal", "error", "init: " + str(e))
 
-def main_poll():
-    try:
-        for sensor in sensors:
-            mutex.acquire()
-            s = sensor
-            mutex.release()
+def commit_poll():
+    newHash = calchash("/etc/config/diginsensorconf")
+    oldHash = readhash("/etc/netping_digital_inputs/diginsensor_hash")
+    
+    if newHash != oldHash:
+        commit_handler()
 
-                #polling by template
-            if s['template'] == 'SNMP':
-                snmp_id = snmp_pr.get_snmp_value(s['snmp_addr'], s['community'], s['oid'], s['snmp_port'], s['timeout'])
-                time.sleep(int(s['timeout']))
-                value, err = snmp_pr.res_get_snmp_value(snmp_id)
-                        
-                s['status'] = err
-
-                if value != '-1':
-                    s['state'] = value
-
-                synchronize_config(s)
-            else:
-                journal.WriteLog(module_name, "Normal", "error", "main_poll: Wrong template name " + s['template'])
-                        
-            time.sleep(sensor_default['period'])
-    except Exception as ex:
-        journal.WriteLog(module_name, "Normal", "error", "main_poll: Exception error" + str(ex))
-
-def poll():
-    try:
-        ubus.listen(("commit", commit_handler))
-        ubus.loop(1)
-    except Exception as e:
-        journal.WriteLog(module_name, "Normal", "error", "poll: " + str(e))
+        with open("/etc/netping_digital_inputs/diginsensor_hash", "w") as f:
+            f.write(newHash)
 
 def synchronize_config(sensor):
     try:
@@ -190,19 +237,23 @@ def synchronize_config(sensor):
         journal.WriteLog(module_name, "Normal", "error", "synchronize_config: " + str(ex))
 
 def main():
-    #journal.WriteLog(module_name, "Normal", "notice", module_name + "started!")
-    ubus.connect()
+    journal.WriteLog(module_name, "Normal", "notice", module_name + "started!")
+    
+    try:
+        ubus.connect()
 
-    init()
+        init()
 
-    #main implementation
-    while(1):
-        poll()
-        main_poll()
+        #main implementation
+        while(1):
+            commit_poll()
+            time.sleep(1)
 
-    ubus.disconnect()
+    except KeyboardInterrupt:
+        ubus.disconnect()
+        del threads[:]
 
-    #journal.WriteLog(module_name, "Normal", "notice", module_name + "finished!")
+    journal.WriteLog(module_name, "Normal", "notice", module_name + "finished!")
 
 if __name__ == '__main__':
     main()

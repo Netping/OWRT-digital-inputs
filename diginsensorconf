@@ -4,6 +4,7 @@ config globals 'globals'
 	list status '0.Normal'
 	list status '1.Timeout'
 	list status '2.Error'
+	option maxsensors 32
 
 config sensor 'prototype'
 	option name 'SensorName'
@@ -17,6 +18,21 @@ config sensor 'prototype'
 
 config sensor
 	option name 'Door1'
+	option description 'Дверь шкафа'
+	option ton_desc 'Дверь открыта'
+	option toff_desc 'Дверь закрыта'
+	option template 'SNMP'
+	option state '0'
+	option status '0'
+	option snmp_addr '125.227.188.172'
+	option snmp_port '31161'
+	option community 'SWITCH'
+	option oid '.1.3.6.1.4.1.25728.5500.5.1.2.1'
+	option timeout '3'
+	option period '1'
+
+config sensor
+	option name 'Door2'
 	option description 'Дверь шкафа'
 	option ton_desc 'Дверь открыта'
 	option toff_desc 'Дверь закрыта'
