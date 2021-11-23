@@ -9,7 +9,7 @@ PKG_RELEASE=4
 MODULE_FILES=
 MODULE_FILES_DIR=/usr/lib/python3.7/
 
-ETC_FILES=Configname
+ETC_FILES=Configname owrt_digital_inputs.py
 ETC_FILES_DIR=/etc/netping_digital_inputs/
 
 CONF_FILE=diginsensorconf
