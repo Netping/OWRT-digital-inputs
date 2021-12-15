@@ -22,38 +22,31 @@ snmp_pr = snmp_protocol()
 max_sensors = 0
 
 
-def calchash(fname):
-    hash_md5 = hashlib.md5()
-    with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-
-    return hash_md5.hexdigest()
-
-def readhash(hashfile):
-    value = ''
-    with open(hashfile, "r") as f:
-        value = f.readline()
-
-    return value
-
 def thread_poll(thread_id, sensor):
     while thread_id in threads:
         if sensor['template'] == 'SNMP':
             snmp_id = snmp_pr.get_snmp_value(sensor['snmp_addr'], sensor['community'], sensor['oid'], sensor['snmp_port'], sensor['timeout'])
             time.sleep(int(sensor['timeout']))
             value, err = snmp_pr.res_get_snmp_value(snmp_id)
+
+            send_ubus = False
                       
             mutex.acquire()
 
             sensor['status'] = err
+            send_name = sensor['name']
 
             if value != '-1':
+                if value != sensor['state']:
+                    send_ubus = True
+
                 sensor['state'] = value
-
-            synchronize_config(sensor)
-
+            
             mutex.release()
+
+            if send_ubus:
+                #journal.WriteLog(module_name, "Normal", "notice", "state changed " + send_name + " set to " + value)
+                ubus.send("signal", {"event": "statechanged", "name": send_name, "state": value})
         else:
             journal.WriteLog(module_name, "Normal", "error", "thread_poll: Wrong template name " + sensor['template'])
                         
@@ -72,8 +65,10 @@ def applyConf():
             sensor_default['ton_description'] = confdict['ton_desc']
             sensor_default['toff_description'] = confdict['toff_desc']
             sensor_default['template'] = confdict['template'] #maybe need map for this
-            sensor_default['state'] = bool(int(confdict['state']))
-            sensor_default['status'] = confdict['status']
+            #sensor_default['state'] = bool(int(confdict['state']))
+            #sensor_default['status'] = confdict['status']
+            sensor_default['state'] = '0'
+            sensor_default['status'] = '0'
             sensor_default['period'] = int(confdict['period'])
             continue
 
@@ -113,19 +108,12 @@ def applyConf():
                 sensor['template'] = sensor_default['template']
 
             try:
-                sensor['state'] = bool(int(confdict['state']))
-            except:
-                sensor['state'] = bool(int(sensor_default['state']))
-
-            try:
-                sensor['status'] = confdict['status']
-            except:
-                sensor['status'] = sensor_default['status']
-
-            try:
                 sensor['period'] = int(confdict['period'])
             except:
                 sensor['period'] = int(sensor_default['period'])
+
+            sensor['state'] = sensor_default['state']
+            sensor['status'] = sensor_default['status']
 
             if sensor['template'] == 'SNMP': #maybe need map for this
                 try:
@@ -177,83 +165,69 @@ def applyConf():
 
     mutex.release()
 
-def commit_handler():
-    #reconfigure
-    mutex.acquire()
-    del sensors[:]
-    mutex.release()
-
+def init():
     applyConf()
 
-def init():
-    try:
-        #ubus.connect()
+    def get_state_callback(event, data):
+        ret_val = {}
+        journal.WriteLog(module_name, "Normal", "notice", "get_state_callback called with data: " + str(data))
+        sensor_name = data['name']
 
-        newHash = calchash("/etc/config/diginsensorconf")
+        found = False
 
-        with open("/etc/netping_digital_inputs/diginsensor_hash", "w") as f:
-            f.write(newHash)
+        mutex.acquire()
+
+        for s in sensors:
+            if sensor_name == s['name']:
+                ret_val['state'] = s['state']
+                ret_val['status'] = s['status']
+                found = True
+                break
+
+        mutex.release()
+
+        if not found:
+            ret_val['state'] = '-1'
+            ret_val['status'] = '-2'
+
+        event.reply(ret_val)
+
+    ubus.add(
+            'owrt_digital_inputs', {
+                'get_state': {
+                    'method': get_state_callback,
+                    'signature': {
+                        'name': ubus.BLOBMSG_TYPE_STRING
+                    }
+                }
+            }
+        )
+
+def reparseconfig(event, data):
+    if data['config'] == confName:
+        #reconfigure
+        mutex.acquire()
+        del sensors[:]
+        mutex.release()
 
         applyConf()
 
-        #ubus.disconnect()
-    except Exception as e:
-        journal.WriteLog(module_name, "Normal", "error", "init: " + str(e))
-
-def commit_poll():
-    newHash = calchash("/etc/config/diginsensorconf")
-    oldHash = readhash("/etc/netping_digital_inputs/diginsensor_hash")
-    
-    if newHash != oldHash:
-        commit_handler()
-
-        with open("/etc/netping_digital_inputs/diginsensor_hash", "w") as f:
-            f.write(newHash)
-
-def synchronize_config(sensor):
-    try:
-        state = ''
-        status = ''
-        updated = False
-
-        confvalues = ubus.call("uci", "get", {"config": confName})
-        for confdict in list(confvalues[0]['values'].values()):
-            if confdict['.type'] == 'sensor' and confdict['.name'] == sensor['section']:
-                state = confdict['state']
-                status = confdict['status']
-
-        if state != sensor['state']:
-            ubus.call("uci", "set", {"config" : confName, "section" : sensor['section'], "values" : { "state" : sensor['state'] }})
-            updated = True
-
-        if status != sensor['status']:
-            ubus.call("uci", "set", {"config" : confName, "section" : sensor['section'], "values" : { "status" : sensor['status'] }})
-            updated = True
-
-        if updated:
-            #print('Sensor ' + sensor['name'] + ' changed')
-            ubus.call("uci", "commit", {"config" : confName})
-    except Exception as ex:
-        journal.WriteLog(module_name, "Normal", "error", "synchronize_config: " + str(ex))
-
 def main():
-    journal.WriteLog(module_name, "Normal", "notice", module_name + "started!")
+    journal.WriteLog(module_name, "Normal", "notice", module_name + " started!")
     
     try:
         ubus.connect()
 
         init()
 
-        #main implementation
-        while(1):
-            commit_poll()
-            time.sleep(1)
+        ubus.listen(("commit", reparseconfig))
+        ubus.loop()
 
     except KeyboardInterrupt:
         ubus.disconnect()
         del threads[:]
 
-    journal.WriteLog(module_name, "Normal", "notice", module_name + "finished!")
+    journal.WriteLog(module_name, "Normal", "notice", module_name + " finished!")
 
 if __name__ == '__main__':
     main()
