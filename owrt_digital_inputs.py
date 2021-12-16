@@ -17,6 +17,7 @@ confName = 'diginsensorconf'
 sensor_default = {}
 sensors = []
 threads = []
+ubus_signals = []
 mutex = Lock()
 snmp_pr = snmp_protocol()
 max_sensors = 0
@@ -28,8 +29,6 @@ def thread_poll(thread_id, sensor):
             snmp_id = snmp_pr.get_snmp_value(sensor['snmp_addr'], sensor['community'], sensor['oid'], sensor['snmp_port'], sensor['timeout'])
             time.sleep(int(sensor['timeout']))
             value, err = snmp_pr.res_get_snmp_value(snmp_id)
-
-            send_ubus = False
                       
             mutex.acquire()
 
@@ -38,19 +37,26 @@ def thread_poll(thread_id, sensor):
 
             if value != '-1':
                 if value != sensor['state']:
-                    send_ubus = True
+                    e = {}
+                    e['name'] = send_name
+                    e['state'] = value
+
+                    ubus_signals.insert(0, e)
 
                 sensor['state'] = value
             
             mutex.release()
 
-            if send_ubus:
-                #journal.WriteLog(module_name, "Normal", "notice", "state changed " + send_name + " set to " + value)
-                ubus.send("signal", {"event": "statechanged", "name": send_name, "state": value})
+            #try:
+            #    if send_ubus:
+            #        journal.WriteLog(module_name, "Normal", "notice", "state changed " + send_name + " set to " + value)
+            #        ubus.send("signal", {"event": "statechanged", "name": send_name, "state": value})
+            #except Exception as ex:
+            #    journal.WriteLog(module_name, "Normal", "error", "thread_poll: exception " + str(ex))
         else:
             journal.WriteLog(module_name, "Normal", "error", "thread_poll: Wrong template name " + sensor['template'])
                         
-        time.sleep(sensor_default['period'])
+        #time.sleep(sensor_default['period'])
 
 def applyConf():
     confvalues = ubus.call("uci", "get", {"config": confName})
@@ -221,7 +227,12 @@ def main():
         init()
 
         ubus.listen(("commit", reparseconfig))
-        ubus.loop()
+
+        while True:
+            ubus.loop(1)
+            while ubus_signals:
+                e = ubus_signals.pop()
+                ubus.send("signal", {"event": "statechanged", "name": e['name'], "state": e['state']})
 
     except KeyboardInterrupt:
         ubus.disconnect()
