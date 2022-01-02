@@ -4,7 +4,7 @@ TITLE="EPIC OWRT-Digital-inputs"
 
 PKG_NAME="OWRT-Digital-inputs"
 PKG_VERSION="Epic.V0.1"
-PKG_RELEASE=6
+PKG_RELEASE=7
 
 MODULE_FILES=
 MODULE_FILES_DIR=/usr/lib/python3.7/

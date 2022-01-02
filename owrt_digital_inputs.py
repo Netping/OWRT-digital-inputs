@@ -203,7 +203,8 @@ def init():
                 'get_state': {
                     'method': get_state_callback,
                     'signature': {
-                        'name': ubus.BLOBMSG_TYPE_STRING
+                        'name': ubus.BLOBMSG_TYPE_STRING,
+                        'ubus_rpc_session': ubus.BLOBMSG_TYPE_STRING
                     }
                 }
             }
