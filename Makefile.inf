@@ -1,6 +1,6 @@
 SECTION="NetPing modules"
 CATEGORY="Base"
-TITLE="EPIC OWRT-Digital-inputs"
+TITLE="OWRT-digital-inputs"
 
 PKG_NAME="OWRT-Digital-inputs"
 PKG_VERSION="0.1"
