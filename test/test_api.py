@@ -1,20 +1,23 @@
 #!/usr/bin/python3
 import os
 import sys
-import argparse
 
-version = '0.1'
-
-ap = argparse.ArgumentParser()
-ap.add_argument("-v", "--version", required=True, help="version of test module")
-args = vars(ap.parse_args())
-if args['version'] != version:
-    print("Wrong version! Expected \"" + version + "\"")
-    sys.exit(-2)
+def help():
+    print(f"Usage: {sys.argv[0]} <version>")
 
 if __name__ == "__main__":
+    expected_version = "0.1"
 
-    print('OWRT-Digital-inputs')
-    print('version ' + version)
+    if len(sys.argv) != 2:
+        help()
+        sys.exit(-1)
+
+    if sys.argv[1] != expected_version:
+        print(f"Wrong version! Expected \" {expected_version} \"")
+        sys.exit(-2)
+
+    print("OWRT-digital-inputs")
+    print(f"Version {expected_version}")
+
     os.system("pytest --capture=no -v test.py")
     sys.exit(0)
