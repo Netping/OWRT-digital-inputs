@@ -1,11 +1,11 @@
 SECTION="NetPing modules"
 CATEGORY="Base"
-TITLE="EPIC OWRT-Digital-inputs"
+TITLE="OWRT-digital-inputs"
 
-PKG_NAME="OWRT-Digital-inputs"
+PKG_NAME="OWRT-digital-inputs"
 PKG_VERSION="Epic.V0.1"
 PKG_RELEASE=7
-PKG_DEPENDS=OWRT_Log OWRT_SNMP_Protocol
+PKG_DEPENDS=OWRT-log OWRT-snmp-protocol
 
 MODULE_FILES=
 MODULE_FILES_DIR=/usr/lib/python3.7/
