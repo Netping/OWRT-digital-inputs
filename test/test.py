@@ -153,3 +153,8 @@ def test_ubus_api():
                             assert getattr(method['outparams'][key][1], method['outparams'][key][0])(res[0][key])
     except:
         assert ret
+        
+    #delete section from config
+    os.system(f"uci delete owrt_sensor_value.{testsensor}")
+    os.system(f"uci commit {config}")
+    os.system("ubus send commit '{\"config\":\"" + config + "\"}'")
