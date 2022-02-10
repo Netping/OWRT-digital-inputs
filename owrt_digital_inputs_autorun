@@ -11,6 +11,6 @@ USE_PROCD=1
 
 start_service() {
         procd_open_instance
-        procd_set_param command python3 /etc/netping_digital_inputs/owrt_digital_inputs.py &> /dev/null
+        procd_set_param command python3 /etc/netping/digital_inputs/owrt_digital_inputs.py &> /dev/null
         procd_close_instance
 }

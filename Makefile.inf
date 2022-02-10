@@ -3,7 +3,7 @@ CATEGORY="Base"
 TITLE="OWRT-digital-inputs"
 
 PKG_NAME="OWRT-digital-inputs"
-PKG_VERSION="Epic.V0.1"
+PKG_VERSION="0.1"
 PKG_RELEASE=8
 PKG_DEPENDS=OWRT-log OWRT-snmp-protocol
 
@@ -11,7 +11,7 @@ MODULE_FILES=
 MODULE_FILES_DIR=/usr/lib/python3.7/
 
 ETC_FILES=Configname owrt_digital_inputs.py
-ETC_FILES_DIR=/etc/netping_digital_inputs/
+ETC_FILES_DIR=/etc/netping/digital_inputs/
 
 CONF_FILE=diginsensorconf
 CONF_DIR=/etc/config/
@@ -20,11 +20,14 @@ AUTORUN_FILES=owrt_digital_inputs_autorun
 
 INSTALL_DIR=
 
-.PHONY: all install
+all: build preinstall install configure 
 
-all: configure build install
+ipk: build install
 
 build:
+	@echo "Nothing to do"
+
+preinstall:
 	@echo "Nothing to do"
 
 configure:
