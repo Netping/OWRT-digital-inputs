@@ -4,7 +4,7 @@ TITLE="OWRT-digital-inputs"
 
 PKG_NAME="OWRT-digital-inputs"
 PKG_VERSION="0.1"
-PKG_RELEASE=8
+PKG_RELEASE=9
 PKG_DEPENDS=OWRT-log OWRT-snmp-protocol
 
 MODULE_FILES=
@@ -13,7 +13,7 @@ MODULE_FILES_DIR=/usr/lib/python3.7/
 ETC_FILES=Configname owrt_digital_inputs.py
 ETC_FILES_DIR=/etc/netping/digital_inputs/
 
-CONF_FILE=diginsensorconf
+CONF_FILES=diginsensorconf digintemplatesconf
 CONF_DIR=/etc/config/
 
 AUTORUN_FILES=owrt_digital_inputs_autorun
@@ -39,7 +39,7 @@ ifneq ($(INSTALL_DIR),)
 	mkdir -p $(INSTALL_DIR)/etc/init.d
 	mkdir -p $(INSTALL_DIR)/etc/rc.d
 endif
-	cp $(CONF_FILE) $(INSTALL_DIR)/$(CONF_DIR)
+	for f in $(CONF_FILES); do cp $${f} $(INSTALL_DIR)/$(CONF_DIR); done
 ifneq ($(INSTALL_DIR),)
 	mkdir -p $(INSTALL_DIR)$(MODULE_FILES_DIR)
 	for f in $(MODULE_FILES); do cp $${f} $(INSTALL_DIR)$(MODULE_FILES_DIR); done
@@ -55,7 +55,7 @@ endif
 
 clean:
 ifeq ($(INSTALL_DIR),)
-	rm -f $(CONF_DIR)$(CONF_FILE)
+	for f in $(CONF_FILES); do rm -f $(CONF_DIR)$${f}; done
 	for f in $(MODULE_FILES); do rm -f $(MODULE_FILES_DIR)$${f}; done
 	rm -rf $(ETC_FILES_DIR)
 	rm -f /etc/init.d/owrt_digital_inputs

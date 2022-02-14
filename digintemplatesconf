@@ -1,0 +1,6 @@
+config info 'SNMP'
+	option snmp_addr '127.0.0.1'
+	option snmp_port '161'
+	option community '0'
+	option oid '0'
+	option timeout '1'

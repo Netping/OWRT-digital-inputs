@@ -23,13 +23,33 @@ snmp_pr = snmp_protocol()
 max_sensors = 0
 
 
+def read_template(template):
+    ret = {}
+
+    confvalues = ubus.call("uci", "get", {"config": 'digintemplatesconf'})
+    for confdict in list(confvalues[0]['values'].values()):
+        if confdict['.type'] == 'info' and confdict['.name'] == template:
+            ret = confdict
+            del ret['.type']
+            del ret['.name']
+            del ret['.anonymous']
+            del ret['.index']
+            break
+
+    return ret
+
 def thread_poll(thread_id, sensor):
     while thread_id in threads:
         if sensor['template'] == 'SNMP':
-            snmp_id = snmp_pr.get_snmp_value(sensor['snmp_addr'], sensor['community'], sensor['oid'], sensor['snmp_port'], sensor['timeout'])
-            time.sleep(int(sensor['timeout']))
+            snmp_id = 0
+
+            try:
+                snmp_id = snmp_pr.get_snmp_value(sensor['snmp_addr'], sensor['community'], sensor['oid'], sensor['snmp_port'], sensor['timeout'])
+            except:
+                continue
+                
             value, err = snmp_pr.res_get_snmp_value(snmp_id)
-                      
+                          
             mutex.acquire()
 
             sensor['status'] = err
@@ -47,16 +67,10 @@ def thread_poll(thread_id, sensor):
             
             mutex.release()
 
-            #try:
-            #    if send_ubus:
-            #        journal.WriteLog(module_name, "Normal", "notice", "state changed " + send_name + " set to " + value)
-            #        ubus.send("signal", {"event": "statechanged", "name": send_name, "state": value})
-            #except Exception as ex:
-            #    journal.WriteLog(module_name, "Normal", "error", "thread_poll: exception " + str(ex))
+            time.sleep(sensor['period'])
+
         else:
             journal.WriteLog(module_name, "Normal", "error", "thread_poll: Wrong template name " + sensor['template'])
-                        
-        #time.sleep(sensor_default['period'])
 
 def applyConf():
     confvalues = ubus.call("uci", "get", {"config": confName})
@@ -70,9 +84,7 @@ def applyConf():
             sensor_default['description'] = confdict['description']
             sensor_default['ton_description'] = confdict['ton_desc']
             sensor_default['toff_description'] = confdict['toff_desc']
-            sensor_default['template'] = confdict['template'] #maybe need map for this
-            #sensor_default['state'] = bool(int(confdict['state']))
-            #sensor_default['status'] = confdict['status']
+            sensor_default['template'] = confdict['template']
             sensor_default['state'] = '0'
             sensor_default['status'] = '0'
             sensor_default['period'] = int(confdict['period'])
@@ -99,17 +111,17 @@ def applyConf():
                 sensor['description'] = sensor_default['description']
 
             try:
-                sensor['ton_description'] = confdict['ton_description']
+                sensor['ton_description'] = confdict['ton_desc']
             except:
                 sensor['ton_description'] = sensor_default['ton_description']
 
             try:
-                sensor['toff_description'] = confdict['toff_description']
+                sensor['toff_description'] = confdict['toff_desc']
             except:
                 sensor['toff_description'] = sensor_default['toff_description']
 
             try:
-                sensor['template'] = confdict['template'] #maybe need map for this
+                sensor['template'] = confdict['template']
             except:
                 sensor['template'] = sensor_default['template']
 
@@ -121,31 +133,33 @@ def applyConf():
             sensor['state'] = sensor_default['state']
             sensor['status'] = sensor_default['status']
 
-            if sensor['template'] == 'SNMP': #maybe need map for this
+            if sensor['template'] == 'SNMP':
+                template_sensor = read_template('SNMP')
+                
                 try:
                     sensor['snmp_addr'] = confdict['snmp_addr']
                 except:
-                    sensor['snmp_addr'] = '0.0.0.0'
+                    sensor['snmp_addr'] = template_sensor['snmp_addr']
 
                 try:
                     sensor['snmp_port'] = confdict['snmp_port']
                 except:
-                    sensor['snmp_port'] = '0'
+                    sensor['snmp_port'] = template_sensor['snmp_port']
 
                 try:
                     sensor['community'] = confdict['community']
                 except:
-                    sensor['community'] = '0'
+                    sensor['community'] = template_sensor['community']
 
                 try:
                     sensor['oid'] = confdict['oid']
                 except:
-                    sensor['oid'] = '0'
+                    sensor['oid'] = template_sensor['oid']
 
                 try:
                     sensor['timeout'] = confdict['timeout']
                 except:
-                    sensor['timeout'] = '0'
+                    sensor['timeout'] = template_sensor['timeout']
 
             mutex.acquire()
 
