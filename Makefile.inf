@@ -4,7 +4,7 @@ TITLE="OWRT-digital-inputs"
 
 PKG_NAME="OWRT-digital-inputs"
 PKG_VERSION="0.1"
-PKG_RELEASE=9
+PKG_RELEASE=10
 PKG_DEPENDS=OWRT-log OWRT-snmp-protocol
 
 MODULE_FILES=
@@ -15,6 +15,8 @@ ETC_FILES_DIR=/etc/netping/digital_inputs/
 
 CONF_FILES=diginsensorconf digintemplatesconf
 CONF_DIR=/etc/config/
+
+TESTS_SRC_DIR=Tests
 
 AUTORUN_FILES=owrt_digital_inputs_autorun
 
@@ -49,6 +51,7 @@ endif
 	mkdir -p $(INSTALL_DIR)$(ETC_FILES_DIR)
 	for f in $(ETC_FILES); do cp $${f} $(INSTALL_DIR)$(ETC_FILES_DIR); done
 	mkdir -p $(INSTALL_DIR)$(ETC_FILES_DIR)/commands
+	cp -r $(TESTS_SRC_DIR) $(INSTALL_DIR)$(ETC_FILES_DIR)
 	for f in $(AUTORUN_FILES); do cp $${f} $(INSTALL_DIR)/etc/init.d; done
 	mv $(INSTALL_DIR)/etc/init.d/owrt_digital_inputs_autorun $(INSTALL_DIR)/etc/init.d/owrt_digital_inputs
 	ln -s ../init.d/owrt_digital_inputs $(INSTALL_DIR)/etc/rc.d/S90OWRT-Digital-inputs
