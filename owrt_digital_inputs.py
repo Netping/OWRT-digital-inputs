@@ -84,7 +84,7 @@ def applyConf():
             sensor_default['description'] = confdict['description']
             sensor_default['ton_description'] = confdict['ton_desc']
             sensor_default['toff_description'] = confdict['toff_desc']
-            sensor_default['template'] = confdict['template']
+            sensor_default['template'] = confdict['protocol']
             sensor_default['state'] = '0'
             sensor_default['status'] = '0'
             sensor_default['period'] = int(confdict['period'])
@@ -121,7 +121,7 @@ def applyConf():
                 sensor['toff_description'] = sensor_default['toff_description']
 
             try:
-                sensor['template'] = confdict['template']
+                sensor['template'] = confdict['protocol']
             except:
                 sensor['template'] = sensor_default['template']
 
