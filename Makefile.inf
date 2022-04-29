@@ -4,8 +4,8 @@ TITLE="OWRT-digital-inputs"
 
 PKG_NAME="OWRT-digital-inputs"
 PKG_VERSION="0.1"
-PKG_RELEASE=10
-PKG_DEPENDS=OWRT-log OWRT-snmp-protocol
+PKG_RELEASE=22
+PKG_DEPENDS=OWRT-log OWRT-snmp-protocol OWRT-PLIB-ubus
 
 MODULE_FILES=
 MODULE_FILES_DIR=/usr/lib/python3.7/
