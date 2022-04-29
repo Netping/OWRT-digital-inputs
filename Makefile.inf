@@ -4,7 +4,7 @@ TITLE="OWRT-digital-inputs"
 
 PKG_NAME="OWRT-digital-inputs"
 PKG_VERSION="0.1"
-PKG_RELEASE=22
+PKG_RELEASE=23
 PKG_DEPENDS=OWRT-log OWRT-snmp-protocol OWRT-PLIB-ubus
 
 MODULE_FILES=

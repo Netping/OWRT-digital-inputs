@@ -48,7 +48,7 @@ def test_conf_valid():
         for confdict in list(confvalues[0]['values'].values()):
             #check globals
             if confdict['.type'] == 'globals' and confdict['.name'] == 'globals':
-                assert confdict['template'] == ['Empty.пусто', 'SNMP.датчик устройства NetPing по SNMP']
+                assert confdict['protocol'] == ['Empty.пусто', 'SNMP.датчик устройства NetPing по SNMP']
                 assert confdict['status'] == ['0.Normal', '1.Timeout', '2.Error']
                 assert confdict['maxsensors'] == '32'
             #check sensor_prototype
@@ -57,9 +57,7 @@ def test_conf_valid():
                 assert confdict['description'] == 'Description'
                 assert confdict['ton_desc'] == 'ON'
                 assert confdict['toff_desc'] == 'OFF'
-                assert confdict['template'] == 'Empty'
-                assert confdict['state'] == '0'
-                assert confdict['status'] == '0'
+                assert confdict['protocol'] == 'Empty'
                 assert confdict['period'] == '1'
     except:
         assert ret
@@ -155,6 +153,6 @@ def test_ubus_api():
         assert ret
         
     #delete section from config
-    os.system(f"uci delete owrt_sensor_value.{testsensor}")
+    os.system(f"uci delete {config}.{testsensor}")
     os.system(f"uci commit {config}")
     os.system("ubus send commit '{\"config\":\"" + config + "\"}'")
