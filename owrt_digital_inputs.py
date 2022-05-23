@@ -38,40 +38,6 @@ def read_template(template):
 
     return ret
 
-def thread_poll(thread_id, sensor):
-    while thread_id in threads:
-        if sensor['template'] == 'SNMP':
-            snmp_id = 0
-
-            try:
-                snmp_id = snmp_pr.get_snmp_value(sensor['snmp_addr'], sensor['community'], sensor['oid'], sensor['snmp_port'], sensor['timeout'])
-            except:
-                continue
-                
-            value, err = snmp_pr.res_get_snmp_value(snmp_id)
-                          
-            mutex.acquire()
-
-            sensor['status'] = err
-            send_name = sensor['name']
-
-            if value != '-1':
-                if value != sensor['state']:
-                    e = {}
-                    e['name'] = send_name
-                    e['state'] = value
-
-                    ubus_signals.insert(0, e)
-
-                sensor['state'] = value
-            
-            mutex.release()
-
-            time.sleep(sensor['period'])
-
-        else:
-            journal.WriteLog(module_name, "Normal", "error", "thread_poll: Wrong template name " + sensor['template'])
-
 def applyConf():
     confvalues = ubus.call("uci", "get", {"config": confName})
     for confdict in list(confvalues[0]['values'].values()):
@@ -157,9 +123,15 @@ def applyConf():
                     sensor['oid'] = template_sensor['oid']
 
                 try:
-                    sensor['timeout'] = confdict['timeout']
+                    sensor['timeout'] = int(confdict['timeout'])
                 except:
-                    sensor['timeout'] = template_sensor['timeout']
+                    sensor['timeout'] = int(template_sensor['timeout'])
+
+                if sensor['period'] < sensor['timeout']:
+                    sensor['period'] = sensor['timeout']
+                    journal.WriteLog(module_name, "Normal", "notice", "Period value less than timeout. Period value setted to equal timeout")
+
+                sensor['id'] = snmp_pr.start_snmp_poll(sensor['snmp_addr'], sensor['community'], sensor['oid'], sensor['snmp_port'], sensor['timeout'], sensor['period'])
 
             mutex.acquire()
 
@@ -170,45 +142,26 @@ def applyConf():
 
             mutex.release()
 
-    #update threads from sensors
-    del threads[:]
-
-    mutex.acquire()
-
-    for s in sensors:
-        thr_id = len(threads) + 1
-
-        threads.append(thr_id)
-
-        thr = Thread(target=thread_poll, args=(thr_id, s))
-        thr.start()
-
-    mutex.release()
-
 def init():
     applyConf()
 
     def get_state_callback(event, data):
         ret_val = {}
-        journal.WriteLog(module_name, "Normal", "notice", "get_state_callback called with data: " + str(data))
         sensor_name = data['name']
 
-        found = False
+        ret_val['state'] = '-1'
+        ret_val['status'] = '-2'
 
         mutex.acquire()
 
         for s in sensors:
             if sensor_name == s['name']:
-                ret_val['state'] = s['state']
-                ret_val['status'] = s['status']
-                found = True
+                value, error = snmp_pr.get_snmp_poll(s['id'])
+                ret_val['state'] = value 
+                ret_val['status'] = error
                 break
 
         mutex.release()
-
-        if not found:
-            ret_val['state'] = '-1'
-            ret_val['status'] = '-2'
 
         event.reply(ret_val)
 
@@ -228,7 +181,15 @@ def reparseconfig(event, data):
     if data['config'] == confName:
         #reconfigure
         mutex.acquire()
+
+        for s in sensors:
+            retval = snmp_pr.stop_snmp_poll(s['id'])
+
+            if retval != 0:
+                journal.WriteLog(module_name, "Normal", "error", "Can't stop snmp_poll for sensor " + s['name'])
+
         del sensors[:]
+
         mutex.release()
 
         applyConf()
